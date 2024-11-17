@@ -1,4 +1,4 @@
-# 42_syber_security_pool
+# 42_cyber_security_pool
 
 A **piscine** is a structured program split into small daily projects to learn a language, paradigm, or technology. It requires consistent effort and collaboration.
 
