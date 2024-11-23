@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 import requests
 from bs4 import BeautifulSoup
 import argparse
@@ -39,30 +40,45 @@ def save_image(url, save_path):
     except Exception as e:
         print(f"Error downloading {url}: {e}")
 
-def recursive_search(url, depth, max_depth, save_path):
+def recursive_search(url, depth, max_depth, save_path, visited_links = set()):
     """
         recursively search and download images 
     """
 
     if depth > max_depth:
         return
-    
+    if url in visited_links:
+        return
+    visited_links.add(url)
+    print(f"depth : {depth}")
     try:
-        response = session.get(url)
-        if response.status_code == 200:
-            soup = BeautifulSoup(response.text, 'html.parser')
-            for link in soup.find_all("a", href=True):
-                href = link.get('href')
-                full_url = urljoin(url, href)
+        response = session.get(url) # Fetch the page content
+        if response.status_code != 200:
+            # print(f"Failed to access {url}, status code: {response.status_code}")
+            return
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
 
-                if is_image_url(full_url):
-                    # Download and save the image
-                    save_image(full_url, save_path)
-                elif href != "../" and depth < max_depth:
-                    # Recurse into the link
-                    recursive_search(full_url, depth + 1, max_depth, save_path)
-        else:
-            print(f"Failed to access {url}, status code: {response.status_code}")
+        for img_tag in soup.find_all("img", src=True): # 1. Images in <img> tags
+            img_url = urljoin(url, img_tag['src'])
+            if is_image_url(img_url):
+                save_image(img_url, save_path)
+
+        for meta_tag in soup.find_all("meta", property="og:image", content=True): # 2. Images in <meta> tags (e.g., OpenGraph images)
+            meta_img_url = urljoin(url, meta_tag['content'])
+            if is_image_url(meta_img_url):
+                save_image(meta_img_url, save_path)
+
+        for link_tag in soup.find_all("link", rel="icon", href=True): # 3. Images in <link> tags (e.g., favicons)
+            link_img_url = urljoin(url, link_tag['href'])
+            if is_image_url(link_img_url):
+                save_image(link_img_url, save_path)
+
+        for link in soup.find_all("a", href=True): # Recursively follow links
+            href = link.get("href")
+            full_url = urljoin(url, href)
+            if href != "../" and depth < max_depth:
+                recursive_search(full_url, depth + 1, max_depth, save_path, visited_links)
     except requests.exceptions.RequestException as e:
         print(f"Error with URL {url}: {e}")
 

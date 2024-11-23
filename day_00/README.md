@@ -11,10 +11,6 @@ Downloads all images from a website recursively.
 ```bash
 ./spider [-rlp] URL
 
-or in my case 
-
-python spider [-rlp] URL
-
 ```
 - `-r`: Recursive download.
 - `-r -l [N]`: Set maximum recursion depth (default: 5).
@@ -27,15 +23,11 @@ Parses and displays metadata (EXIF, creation date, etc.) of image files.
 
 **Usage:**  
 ```bash 
-./scorpion FILE1 [FILE2 ...]
+./scorpion 
 
-or in my case 
-
-python scorpion FILE1 [FILE2 ...]
 ```
+
+the scorpion is GUI ...
 
 **Supported Formats:** `.jpg`, `.jpeg`, `.png`, `.gif`, `.bmp`
 
-### Notes
-- Avoid using external tools like `wget` or `scrapy`.
-- Include all source code and handle errors gracefully.
