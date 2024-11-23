@@ -1,0 +1,36 @@
+#!/usr/bin/python3
+
+import sys
+import argparser
+import time
+import hashlib
+import base64
+import hmac
+
+
+
+def generate_otp(key):
+    return hmac.new(key.encode(), str(time.time()).encode(), hashlib.sha256).hexdigest()[:6]
+
+
+def main():
+    parser = argparser.ArgumentParser(description='This is a script to stor a valid key in a file and generate a one time password based on it .')
+    parser.add_argument('-k', '--key', help='The key to store in the file',
+    parser.add_argument('-g', help='generate a one time password based on the key stored')
+    args = parser.parse_args()
+    if args.key:
+        with open('key.txt', 'w') as f:
+        f.write(args.key)
+        print('Key stored in key.txt')
+    elif args.g:
+        with open('key.txt', 'r') as f:
+        key = f.read()
+        print('Key read from key.txt')
+        print('One time password is: ', generate_otp(key))
+    else
+        parser.print_help()
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
