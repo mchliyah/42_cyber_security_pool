@@ -1,36 +1,96 @@
 #!/usr/bin/python3
 
 import sys
-import argparser
+import os.path as pt
+from argparse import ArgumentParser
 import time
 import hashlib
-import base64
 import hmac
 
 
+def validate_hex_key(key):
+    """
+        check the hex key
+    """
+    if len(key) != 64:
+        raise KeyError("not a 16 length key!")
+    for c in key:
+        if not c in "0123456789abcdefABCDEF":
+            print(c)
+            raise KeyError("not an hex key!")
+    # if  not all(c in "0123456789abcdefABCDEF" for c in key):
+
+def encrypt_key(key: bytes) -> bytes:
+    """
+        Encrypt the key using SHA-256.
+    """
+    return hashlib.sha256(key).digest()
+
+def save_key(key_path: str):
+    """
+        erad and save the key from the input file.
+    """
+    if not pt.exists(key_path):
+        raise FileNotFoundError(f"Key file {key_path} not found.")
+    with open(key_path, "r") as f:
+        key = f.read().strip()
+    validate_hex_key(key)  # Ensure key is valid
+    encrypted_key = encrypt_key(bytes.fromhex(key))  # Encrypt the key
+    with open("ft_otp.key", "wb") as f:
+        f.write(encrypted_key)  # Save encrypted key
+
+def load_encrypted_key(key_path: str) -> bytes:
+    """
+        Load the encrypted key from ft_otp.key.
+    """
+    if not pt.exists(key_path):
+        raise FileNotFoundError(f"Key file {key_path} not found.")
+    with open(key_path, "rb") as f:
+        return f.read()  # Read the stored encrypted key
+
+def generate_hotp(secret: bytes, counter: int) -> str:
+    """
+        Generate a 6-digit HOTP using HMAC-SHA1.
+    """
+
+    counter_bytes = counter.to_bytes(8, 'big')  # 8-byte counter
+    hmac_hash = hmac.new(secret, counter_bytes, hashlib.sha1).digest()
+    
+    # Dynamic truncation
+    offset = hmac_hash[-1] & 0x0F
+    truncated_hash = hmac_hash[offset:offset + 4]
+    code = int.from_bytes(truncated_hash, 'big') & 0x7FFFFFFF  # Remove sign bit
+    return str(code % 10**6).zfill(6)  # Convert to 6-digit string
+
+
+def get_current_counter(step: int = 30) -> int:
+    """Calculate the current counter based on the current time and step size."""
+    return int(time.time() // step)
 
 def generate_otp(key):
     return hmac.new(key.encode(), str(time.time()).encode(), hashlib.sha256).hexdigest()[:6]
 
-
 def main():
-    parser = argparser.ArgumentParser(description='This is a script to stor a valid key in a file and generate a one time password based on it .')
-    parser.add_argument('-k', '--key', help='The key to store in the file',
-    parser.add_argument('-g', help='generate a one time password based on the key stored')
+    parser = ArgumentParser(description="ft_otp: Generate and store secure OTPs.")
+    parser.add_argument("-g", metavar="KEY_FILE", help="Path to the file containing a key (64 hexadecimal characters).")
+    parser.add_argument("-k", metavar="OTP_FILE", help="Generate an OTP using the stored key.")
+    
     args = parser.parse_args()
-    if args.key:
-        with open('key.txt', 'w') as f:
-        f.write(args.key)
-        print('Key stored in key.txt')
-    elif args.g:
-        with open('key.txt', 'r') as f:
-        key = f.read()
-        print('Key read from key.txt')
-        print('One time password is: ', generate_otp(key))
-    else
-        parser.print_help()
-        sys.exit(0)
-
+    
+    try:
+        if args.g:
+            save_key(args.g)
+            print("Key saved successfully in ft_otp.key.")
+        elif args.k:
+            secret = load_encrypted_key(args.k)
+            counter = get_current_counter()  # Compute the counter automatically
+            otp = generate_hotp(secret, counter)
+            print(otp)
+        else:
+            parser.print_help()
+            sys.exit(0)
+    except Exception as e:
+        print(f"Error: {e}")
 
 if __name__ == "__main__":
     main()
