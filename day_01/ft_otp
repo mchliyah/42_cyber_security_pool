@@ -6,30 +6,25 @@ from argparse import ArgumentParser
 import time
 import hashlib
 import hmac
-
+import base64
+import qrcode
+from tkinter import Tk, Label
+from PIL import Image, ImageTk
 
 def validate_hex_key(key):
-    """
-        check the hex key
-    """
+    """Check the hex key."""
     if len(key) != 64:
-        raise KeyError("not a 16 length key!")
+        raise KeyError("Key is not 64 characters long!")
     for c in key:
-        if not c in "0123456789abcdefABCDEF":
-            print(c)
-            raise KeyError("not an hex key!")
-    # if  not all(c in "0123456789abcdefABCDEF" for c in key):
+        if c not in "0123456789abcdefABCDEF":
+            raise KeyError("Key contains invalid non-hexadecimal characters!")
 
 def encrypt_key(key: bytes) -> bytes:
-    """
-        Encrypt the key using SHA-256.
-    """
+    """Encrypt the key using SHA-256."""
     return hashlib.sha256(key).digest()
 
 def save_key(key_path: str):
-    """
-        erad and save the key from the input file.
-    """
+    """Read and save the key from the input file."""
     if not pt.exists(key_path):
         raise FileNotFoundError(f"Key file {key_path} not found.")
     with open(key_path, "r") as f:
@@ -40,19 +35,14 @@ def save_key(key_path: str):
         f.write(encrypted_key)  # Save encrypted key
 
 def load_encrypted_key(key_path: str) -> bytes:
-    """
-        Load the encrypted key from ft_otp.key.
-    """
+    """Load the encrypted key from ft_otp.key."""
     if not pt.exists(key_path):
         raise FileNotFoundError(f"Key file {key_path} not found.")
     with open(key_path, "rb") as f:
         return f.read()  # Read the stored encrypted key
 
 def generate_hotp(secret: bytes, counter: int) -> str:
-    """
-        Generate a 6-digit HOTP using HMAC-SHA1.
-    """
-
+    """Generate a 6-digit HOTP using HMAC-SHA1."""
     counter_bytes = counter.to_bytes(8, 'big')  # 8-byte counter
     hmac_hash = hmac.new(secret, counter_bytes, hashlib.sha1).digest()
     
@@ -62,30 +52,65 @@ def generate_hotp(secret: bytes, counter: int) -> str:
     code = int.from_bytes(truncated_hash, 'big') & 0x7FFFFFFF  # Remove sign bit
     return str(code % 10**6).zfill(6)  # Convert to 6-digit string
 
-
 def get_current_counter(step: int = 30) -> int:
     """Calculate the current counter based on the current time and step size."""
     return int(time.time() // step)
 
-def generate_otp(key):
-    return hmac.new(key.encode(), str(time.time()).encode(), hashlib.sha256).hexdigest()[:6]
+def generate_otp_uri(secret: bytes, label: str, issuer: str) -> str:
+    """Generate a URI for the OTP QR code."""
+    base32_secret = base64.b32encode(secret).decode().strip('=')
+    return f"otpauth://totp/{label}?secret={base32_secret}&issuer={issuer}"
+
+def display_qr_code(uri: str):
+    """Generate and display the QR code using a graphical interface."""
+    qr = qrcode.QRCode(box_size=10, border=5)
+    qr.add_data(uri)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill="black", back_color="white")
+    img.save("otp_qr.png")  # Save for convenience
+
+    # Display using tkinter
+    root = Tk()
+    root.title("OTP QR Code")
+
+    # Load image and display
+    qr_img = Image.open("otp_qr.png")
+    tk_img = ImageTk.PhotoImage(qr_img)
+    label = Label(root, image=tk_img)
+    label.pack()
+
+    root.mainloop()
 
 def main():
+
+    """ this program manag an otp using the hmac"""
     parser = ArgumentParser(description="ft_otp: Generate and store secure OTPs.")
     parser.add_argument("-g", metavar="KEY_FILE", help="Path to the file containing a key (64 hexadecimal characters).")
     parser.add_argument("-k", metavar="OTP_FILE", help="Generate an OTP using the stored key.")
+    parser.add_argument("-q", metavar="LABEL:ISSUER", help="Generate and display a QR code for Google Authenticator.")
     
     args = parser.parse_args()
     
     try:
         if args.g:
+            # Save key securely
             save_key(args.g)
             print("Key saved successfully in ft_otp.key.")
         elif args.k:
+            # Generate OTP and display in terminal
             secret = load_encrypted_key(args.k)
             counter = get_current_counter()  # Compute the counter automatically
             otp = generate_hotp(secret, counter)
-            print(otp)
+            print(f"Your OTP is: {otp}")
+        elif args.q:
+            # Generate and display QR code
+            if not pt.exists("ft_otp.key"):
+                raise FileNotFoundError("Encrypted key not found. Use -g to save a key first.")
+            secret = load_encrypted_key("ft_otp.key")
+            label, issuer = args.q.split(":")
+            uri = generate_otp_uri(secret, label, issuer)
+            display_qr_code(uri)
         else:
             parser.print_help()
             sys.exit(0)
