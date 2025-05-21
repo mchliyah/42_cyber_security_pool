@@ -1,0 +1,6 @@
+Port 4242
+PermitRootLogin yes
+PasswordAuthentication no
+PubkeyAuthentication yes
+PrintMotd no
+Subsystem sftp internal-sftp

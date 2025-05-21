@@ -1,0 +1,34 @@
+services:
+  tor-onion:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: tor-onion
+    depends_on:
+      - traccar
+    ports:
+      - "80:80"
+      - "4242:4242"
+    volumes:
+      - ./secrets:/secrets
+    restart: always
+    networks:
+      - inception
+
+  traccar:
+    image: traccar/traccar:latest
+    container_name: traccar
+    volumes:
+      - traccar_data:/opt/traccar/data
+      - traccar_logs:/opt/traccar/logs
+    restart: always
+    networks:
+      - inception
+
+volumes:
+  traccar_data:
+  traccar_logs:
+
+networks:
+  inception:
+    driver: bridge

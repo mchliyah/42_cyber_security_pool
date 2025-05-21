@@ -1,0 +1,51 @@
+---
+- name: Deploy dark web service with Docker Compose
+  hosts: linux
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Ensure Docker is installed
+      apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+
+    - name: Ensure Docker Compose is installed
+      block:
+        - name: Download Docker Compose binary
+          get_url:
+            url: https://github.com/docker/compose/releases/download/v2.23.3/docker-compose-linux-x86_64
+            dest: /usr/local/bin/docker-compose
+            mode: '0755'
+          register: download_result
+
+        - name: Verify Docker Compose installation
+          command: docker-compose --version
+          register: docker_compose_version
+          changed_when: false
+
+        - name: Debug Docker Compose version
+          debug:
+            msg: "Docker Compose version: {{ docker_compose_version.stdout }}"
+
+    - name: Ensure /opt/ft_onion directory exists
+      file:
+        path: /opt/ft_onion
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Copy folders and file to the remote host
+      copy:
+        src: "../ft_onion/"
+        dest: "/opt/ft_onion/"
+        directory_mode: yes
+
+    - name: Start Docker Compose services
+      command: docker-compose -f ./docker-compose.yml up --build -d
+      args:
+        chdir: /opt/ft_onion

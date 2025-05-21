@@ -1,0 +1,112 @@
+---
+- name: Deploy Nextcloud and Tracar stack with Docker Compose
+  hosts: linux
+  become: yes
+  tasks:
+    # Load .env variables into Ansible facts
+    - name: Load environment variables from .env file
+      community.general.env_file:
+        path: ../.env  # Path to your local .env file
+        state: present
+      tags: always
+
+    # Existing tasks below are updated to use .env variables
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+
+    - name: Ensure Docker is installed
+      apt:
+        name: docker.io
+        state: present
+        update_cache: yes
+
+    - name: Ensure Certbot is installed
+      apt:
+        name: certbot
+        state: present
+
+    # Docker Compose installation block remains unchanged
+    - name: Ensure Docker Compose is installed
+      block:
+        # ... (existing tasks for Docker Compose)
+
+    # Data directory creation tasks remain unchanged
+    - name: Check if data directories exist
+      stat:
+        path: "{{ item }}"
+      register: dir_stat
+      loop:
+        - /var/data/nextcloud
+        - /var/data/traccar
+        - /var/data/traccar/logs
+        - /var/data/db
+
+    - name: Create data directories if they do not exist
+      file:
+        path: "{{ item.item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      loop: "{{ dir_stat.results }}"
+      when: not item.stat.exists
+
+    # Copy tasks remain unchanged
+    - name: Ensure /opt/cloud-1 directory exists
+      file:
+        path: /opt/cloud-1
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Copy folders and file to the remote host
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        directory_mode: yes
+      loop:
+        - { src: "../requirements/", dest: "/opt/cloud-1/requirements/" }
+        - { src: "../src/", dest: "/opt/cloud-1/src/" }
+
+    # Use .env variables directly in templates and tasks
+    - name: Deploy NGINX configuration from template
+      template:
+        src: ../templates/nginx.conf.j2
+        dest: /opt/cloud-1/requirements/nginx/default
+        owner: root
+        group: root
+        mode: '0644'
+      vars:
+        # Reference .env variables directly
+        DOMAIN_NAME: "{{ DOMAIN_NAME }}"
+        ADMIN_EMAIL: "{{ ADMIN_EMAIL }}"
+
+    - name: Check if SSL certificates already exist
+      stat:
+        path: /etc/letsencrypt/live/{{ DOMAIN_NAME }}/fullchain.pem  # Use DOMAIN_NAME from .env
+      register: ssl_cert
+
+    - name: Generate SSL certificates using Certbot (if not already present)
+      command: >
+        certbot certonly --standalone --non-interactive --agree-tos --email {{ ADMIN_EMAIL }} -d {{ DOMAIN_NAME }}
+      when: not ssl_cert.stat.exists
+      environment:
+        PATH: /usr/bin:/usr/local/bin
+      register: certbot_result
+      ignore_errors: yes
+
+    # Remaining tasks (cron job, Docker Compose startup) remain unchanged
+    - name: Set up Certbot renewal cron job
+      cron:
+        name: "Certbot renewal"
+        minute: "0"
+        hour: "0"
+        job: "certbot renew --quiet"
+        user: root
+
+    - name: Start Docker Compose services
+      command: docker-compose -f ./docker-compose.yml up --build -d
+      args:
+        chdir: /opt/cloud-1
